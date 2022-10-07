@@ -73,27 +73,50 @@ def get_nan_indexes(df):
     return indexes
 
 
+def create_unique_themes(prompts):
+    unique_themes = []
+    for prompt in prompts:
+        if prompt.title.lower() not in unique_themes:
+            unique_themes.append(prompt.title)
+    return unique_themes
+
+
 def clear_null_entry_names(df, indexes):
-    print(indexes)
+    first_names = []
+    for i in range(len(df)):
+        if i != indexes[0]:
+            first_names.append(df[i])
+        else:
+            indexes.pop(0)
+    first_names_ndarray = np.array(first_names)
+    return first_names_ndarray
 
 
-def get_prompt_title(prompt):
-    prompt_text = prompt.text
-    highest_score = 0
-    title = ''
-    for key, values in surdict.items():
-        for val in values:
-            words1 = prompt_text.lower().split(" ")
+def group_titles(unique_themes, prompts):
+    new_prompts = []
+    for theme in unique_themes:
+        for prompt in prompts:
+            if prompt.title.lower() == theme.lower():
+                new_prompts.append(prompt)
+    return new_prompts
+
+
+def get_prompt_title(prompts):
+
+    for prompt in prompts:
+        highest_score = 0
+        title = ''
+        prompt_text = prompt.text
+        for key, values in surdict.items():
+            for val in values:
+                words1 = prompt_text.lower().split(" ")
             words2 = val.lower().split(" ")
             score = len(list(set(words1) & set(words2)))
             if score > highest_score:
                 highest_score = score
                 title = title.replace(title, key)
-    prompt.score = highest_score
-    prompt.title = prompt.title + title
-    return prompt
-
-
+        prompt.title = prompt.title + title
+    return prompts
 
 
 def Data_Cleaning(df, first_names, last_names, course_code, prompts, flag):
@@ -101,14 +124,17 @@ def Data_Cleaning(df, first_names, last_names, course_code, prompts, flag):
 
     dataframes = []
     run_flag = 1
+    null_entries = []
+    prompts = get_prompt_title(prompts)
+    themes = create_unique_themes(prompts)
+    prompts = group_titles(themes, prompts)
     for prompt in prompts:
         df_object = []
-        prompt = get_prompt_title(prompt)
         df_object.append(prompt.title)
         df_object.append(prompt.text)
         answer_list = df[prompt.text].values.tolist()
         null_firsts = get_nan_indexes(first_names)
-        null_entries = []
+
         flag = 1
         for i in range(len(answer_list)):
             if is_nan(answer_list[i]):
@@ -126,13 +152,17 @@ def Data_Cleaning(df, first_names, last_names, course_code, prompts, flag):
                 else:
                     val = int(answer_list[i])
 
-            if flag or not i - 2 == null_firsts[0]:
+            if not flag:
+                pass
+            elif i == null_firsts[0]:
+                null_firsts.pop(0)
+            else:
                 df_object.append(val)
             flag = 1
         run_flag = 0
         prompt_df = pd.DataFrame(df_object)
         dataframes.append(prompt_df)
-    clear_null_entry_names(first_names, null_entries)
+    first_names = clear_null_entry_names(first_names, null_entries)
     first_names = first_names[~pd.isnull(first_names)]
     last_names = last_names[~pd.isnull(last_names)]
 
@@ -141,7 +171,6 @@ def Data_Cleaning(df, first_names, last_names, course_code, prompts, flag):
 
     names_df = pd.DataFrame(encrypted_Names)
     arrays = [names_df] + dataframes
-    print(dataframes[0])
 
     merged_df = pd.concat(arrays, axis=1)
     merged_df.to_excel('output.xlsx', index=False, header=False)
